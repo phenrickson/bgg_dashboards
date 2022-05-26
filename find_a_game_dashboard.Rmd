@@ -25,8 +25,8 @@ library(shiny)
 library(shinyWidgets)
 library(knitr)
 library(DT)
-source(here::here("tidy_name_func.R"))
-source(here::here("theme_phil.R"))
+source(here::here("functions/tidy_name_func.R"))
+source(here::here("functions/theme_phil.R"))
 rm(a)
 
 ```
