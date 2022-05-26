@@ -1,0 +1,13 @@
+name: find_a_game_dashboard
+title: find_a_game_dashboard
+username:
+account: phil-henrickson
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 6380058
+bundleId: 5948570
+url: https://phil-henrickson.shinyapps.io/find_a_game_dashboard/
+when: 1653592981.91061
+lastSyncTime: 1653592981.91062
+asMultiple: FALSE
+asStatic: FALSE
