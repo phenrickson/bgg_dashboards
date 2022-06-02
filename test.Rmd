@@ -1,0 +1,355 @@
+---
+title: "Find Boardgame Neighbors"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    social: menu
+    source_code: embed
+runtime: shinyWidgets
+---
+
+```{r setup, include=FALSE}
+
+#source("load_packages.R")
+library(tidyverse)
+library(recipes)
+library(ggplot2)
+library(ggthemes)
+library(dplyr)
+library(data.table)
+library(magrittr)
+library(reshape2)
+library(rsconnect)
+library(flexdashboard)
+library(flextable)
+library(shiny)
+library(shinyWidgets)
+library(knitr)
+library(DT)
+library(ggridges)
+source(here::here("functions/n_min_func.R"))
+source(here::here("functions/n_max_func.R"))
+source(here::here("functions/tidy_name_func.R"))
+source(here::here("functions/theme_phil.R"))
+source(here::here("functions/find_neighbors_min_func.R"))
+source(here::here("functions/find_neighbors_max_func.R"))
+source(here::here("functions/dist_cosine_func.R"))
+
+```
+
+```{r load data sources, include=F}
+
+# laod in active files
+games_dashboard  = 
+        readr::read_rds(here::here("data/games_dashboard.Rdata")) %>%
+        mutate(averageweight = case_when(is.na(averageweight) ~ est_averageweight,
+                                         TRUE ~ averageweight)) %>%
+        mutate(complexity_level = case_when(averageweight < 2 ~ 'Low (1-2)',
+                                            averageweight >=2 & averageweight < 3 ~ 'Moderate (2-3)',
+                                            averageweight >=3 & averageweight < 4 ~ 'High (3-4)',
+                                            averageweight >=4 ~ 'Very High (4-5)')) %>%
+        mutate(complexity_level = factor(complexity_level,
+                                         levels = c("Low (1-2)",
+                                                    "Moderate (2-3)",
+                                                    "High (3-4)",
+                                                    "Very High (4-5)"))) %>%
+        mutate(maxplayers = case_when(maxplayers > 8 ~ 10,
+                                      TRUE ~ maxplayers)) %>%
+        mutate(maxplaytime = case_when(is.na(maxplaytime) ~ playingtime,
+                                       TRUE ~ maxplaytime)) %>%
+        mutate(maxplaytime= case_when(maxplaytime > 600 ~ 600,
+                                       TRUE ~ maxplaytime)) %>%
+        mutate(time_per_player = maxplayers/maxplaytime) %>%
+        mutate(time_per_player = case_when(time_per_player < 1 ~ 1,
+                                           TRUE ~ time_per_player)) %>%
+        mutate(playingtime_level = case_when(maxplaytime < 30 ~ '<30 min',
+                                             maxplaytime >= 30 & maxplaytime < 60 ~ '30-60 min',
+                                             maxplaytime >=60 & maxplaytime < 120 ~ '60-120 min',
+                                             maxplaytime >=120 ~ '>120 min',
+                                             TRUE ~ 'Unknown')) %>%
+        mutate(playingtime_level = factor(playingtime_level,
+                                          levels = c('<30 min',
+                                                     '30-60 min',
+                                                     '60-120 min',
+                                                     '>120 min',
+                                                     'Unknown'))) %>%
+        mutate(game = paste(name, game_id, sep = "-")) %>%
+        arrange(desc(bayesaverage)) %>%
+        mutate(geekrank = row_number()) %>%
+        filter(geekrank <=5000 | yearpublished > 2020) 
+
+# load game types
+game_types = 
+        readr::read_rds(here::here("data/game_types_filtered.Rdata")) %>%
+        filter(value != 'Category: n in a row') %>%
+        mutate(value = case_when(type == 'publisher' | type == 'designer' ~ gsub("\\(|\\)", "", value),
+               TRUE ~ value)) %>%
+        group_by(type, value) %>% 
+        mutate(n_games = n_distinct(game_id)) %>%
+        ungroup() %>%
+        filter((type == 'designer' & n_games > 15 |
+                       type != 'designer')) %>%
+        filter((type == 'publisher' & n_games > 25 |
+                        type != 'publisher'))
+
+# tidy up type names
+game_types_tidied = 
+        game_types %>%
+        mutate(value = gsub("Mechanism: ", "", gsub("Category: ", "", value)))
+
+# load games for modeling with estimates
+games_model_estimated = 
+        readr::read_rds(here::here("data/games_model_estimated.Rdata")) %>%
+        mutate(game = paste(name, game_id, sep = "-"))
+
+### pca recipes and number of pcs used for distance ####
+pca_recipe = readr::read_rds(here::here("models","pca_recipe.Rds"))
+
+# get template
+pca_template = pca_recipe$template %>%
+        as_tibble() %>%
+        filter(game_id %in% (games_dashboard %>% pull(game_id))) %>%
+        mutate(game = paste(game_id, name, sep="-"))
+
+#pca_trained = readr::read_rds(here::here("models", "pca_trained.Rds"))
+
+
+# # neighbors
+# game_neighbors_cosine = 
+#         readr::read_rds(here::here("data/game_neighbors_cosine.Rdata")) %>%
+#         mutate(game = paste(name, game_id, sep = "-")) %>%
+#         mutate(neighbor = paste(neighbor_name, neighbor_id, sep = "-"))
+
+# get pca
+# games_pca = game_neighbors_cosine %>%
+#         select(neighbor_name, neighbor_id, PC1, PC2, PC3, PC4, PC5) %>%
+#         unique() %>%
+#         rename(name = neighbor_name,
+#                game_id = neighbor_id) %>%
+#         mutate(game = paste(name, game_id, sep="-"))
+
+
+```
+
+
+```{r now create selections}
+
+# name of games
+games = games_dashboard %>%
+        pull(game) %>%
+        sort()
+
+# select number of pcs
+number_pcs = 
+       # paste("PC",
+              seq(1, 50, by =1)
+#, sep="")
+
+```
+
+Column {.sidebar}
+-----------------------------------------------------------------------
+
+```{r make sidebar filters}
+
+pickerInput('games',
+            'Select a Game',
+            choices = games,
+            selected = "Gloomhaven-174430",
+            multiple =F,
+            options = list(`live-search`=TRUE))
+
+selectInput("number_pcs",
+            "Select Number of Components",
+            choices = number_pcs,
+            selected = 25,
+            multiple =F)
+        #    multiple = T
+
+
+```
+
+
+```{r get selected games}
+
+# filter to selected game, whats going into the pca recipe
+selected_pca_input = reactive({
+
+        bind_rows(games_model_estimated %>%
+                                          filter(game == input$games),
+                  pca_recipe$template %>%
+                          mutate(game = paste(name, game_id, sep="-")) %>%
+                          filter(game != input$games))
+
+})
+
+
+# whats coming out of the pca recipe, which is the selected game and games published before 2021
+selected_pca_out = reactive({
+
+        pca_recipe %>%
+        prep(strings_as_factor = F) %>%
+        bake(new_data = selected_pca_input()) %>%
+        set_names(., gsub("PC0", "PC", gsub("PC00", "PC", names(.))))
+
+})
+
+
+# get distance
+selected_dist_cosine = reactive({
+
+        # get cosine similarity between all games
+        dist_cosine_func(selected_pca_out() %>%
+                mutate(.row = row_number()) %>%
+                select(.row, starts_with("PC")) %>%
+                select(.row, all_of(paste("PC", seq(1:input$number_pcs), sep=""))) %>%
+                column_to_rownames(".row") %>%
+                as.matrix()
+        )
+
+})
+
+# now get the neighbors
+selected_neighbors = reactive({
+
+        find_neighbors_max_func(selected_dist_cosine()[1:2,], 26) %>%
+                filter(.row == 1) %>%
+                left_join(., selected_pca_out() %>%
+                                  mutate(.row = row_number()) %>%
+                                  select(.row, game_id, name, average, bayesaverage),
+                          by = c(".row")) %>%
+                left_join(., selected_pca_out() %>%
+                                  mutate(.row_neighbor = row_number(),
+                                         neighbor_usersrated = usersrated,
+                                         neighbor_id = game_id,
+                                         neighbor_name = name,
+                                         neighbor_average = average,
+                                         neighbor_yearpublished = yearpublished,
+                                         neighbor_bayesaverage = bayesaverage) %>%
+                                  select(.row_neighbor,
+                                         neighbor_id,
+                                         neighbor_name,
+                                         neighbor_average,
+                                         neighbor_bayesaverage,
+                                         neighbor_usersrated,
+                                         neighbor_yearpublished,
+                                         starts_with("PC")),
+                          by = c(".row_neighbor")) %>%
+                left_join(.,
+                          selected_pca_input() %>%
+                          rename(neighbor_averageweight = averageweight,
+                                 neighbor_id = game_id),
+                  by = c("neighbor_id")) %>%
+        rename(similarity = dist) %>%
+        mutate(score = similarity*neighbor_bayesaverage)
+
+})
+
+# game and its neighbors
+selected_ids = reactive({
+
+         selected_neighbors() %>%
+                select(game_id, neighbor_id) %>%
+                gather() %>%
+                pull(value) %>%
+                unique()
+
+})
+
+
+
+```
+
+
+Column {data-width=650}
+-----------------------------------------------------------------------
+
+### Chart A
+
+```{r show}
+
+renderTable({
+        
+        selected_neighbors() %>%
+             #   select(game_id, name, similarity, neighbor_id, neighbor_name, neighbor_average, neighbor_bayesaverage, score) %>%
+                head(26) %>%
+            #    arrange(desc(score)) %>%
+            #    filter(neighbor_id != params$game_id) %>%
+                arrange(desc(similarity)) %>%
+                mutate_if(is.numeric, round,2) %>%
+                mutate(rank = row_number()-1) %>%
+                select(rank,score, neighbor_yearpublished, neighbor_id, neighbor_name, similarity, neighbor_bayesaverage, neighbor_average, neighbor_averageweight, neighbor_usersrated) %>%
+                head(26) %>%
+                set_names(., gsub("Usersrated", "UserRatings", gsub("Geekrating", "GeekRating", str_to_title(gsub(" ", "", gsub("averageweight", "weight", gsub("yearpublished", "published", gsub("bayesaverage", "geek rating", gsub("neighbor_", "", names(.)))))))))) %>%
+                rename(ID = Id) %>%
+                select(Rank, everything()) %>%
+                     #           mutate(Link = paste("https://boardgamegeek.com/boardgame/", ID, sep="")) %>%
+                mutate(Rank = case_when(Rank == 0 ~ '--',
+                                        TRUE ~ as.character(Rank))) %>%
+                mutate_at(c("ID",
+                          "Published"),
+                          ~ as.character(.)) %>%
+                select(Rank, Published, ID, Name, Similarity, Score, GeekRating, Average, Weight)
+                
+})
+
+```
+
+Column {data-width=350}
+-----------------------------------------------------------------------
+
+### Chart B
+
+```{r get}
+
+renderPlot({
+
+        games_dashboard %>%
+                mutate(type = case_when(game_id %in% selected_ids() ~ 'Game & Neighbors',
+                       TRUE ~ 'All Games')) %>%
+                ggplot(., aes(x=averageweight,
+                              y=type,
+                              fill = type))+
+                geom_density_ridges(alpha = 0.7)+
+                scale_fill_manual(values = c("grey60",
+                                             "navy"))+
+                theme_phil()+
+                guides(fill = "none")
+
+})
+
+
+```
+
+### Chart C
+
+```{r now look}
+
+renderPlot({
+
+        base = selected_pca_out() %>%
+                ggplot(., aes(x=PC1,
+                              y=PC2))+
+                geom_point(alpha = 0.05,
+                           color = 'grey60')+
+                theme_phil()+
+                geom_vline(xintercept = 0,
+                           linetype = 'dotted')+
+                geom_hline(yintercept = 0,
+                           linetype = 'dotted')
+
+        base +
+                geom_point(data = selected_pca_out() %>%
+                                   filter(game_id %in% selected_ids()),
+                           alpha = 0.85,
+                           color = 'navy')+
+                theme_phil()+
+                geom_vline(xintercept = 0,
+                           linetype = 'dotted')+
+                geom_hline(yintercept = 0,
+                           linetype = 'dotted')
+
+})
+
+```
+
