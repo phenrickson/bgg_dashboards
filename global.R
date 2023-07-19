@@ -6,6 +6,7 @@ library(shiny)
 library(shinythemes)
 library(shinydashboard)
 library(bslib)
+library(bsicons)
 library(shinyWidgets)
 library(leaflet)
 
@@ -14,6 +15,7 @@ library(tidyverse)
 
 # visualizations
 library(ggiraph)
+library(bggUtils)
 
 # read/write
 library(pins)
@@ -30,6 +32,11 @@ library(googleCloudStorageR)
 googleCloudStorageR::gcs_auth(json_file = Sys.getenv("GCS_AUTH_FILE"))
 
 
+# functions ---------------------------------------------------------------
+
+# helper functions
+source(here::here("src", "functions.R"))
+
 # load data from gcs ---------------------------------------------------------------
 gcs_board = 
         pins::board_gcs(
@@ -43,7 +50,15 @@ games =
         pins::pin_read(
                 board = gcs_board,
                 name = "games_info"
-        )
+        ) %>%
+        # unnest some info
+        unnest(c(bgg_outcomes, bgg_info)) %>%
+        # arrange by geek rating
+        arrange(desc(bayesaverage))
 
-# src code ----------------------------------------------------------------
+
+theme_set(bggUtils::theme_bgg()+
+        theme(axis.text.y = element_text(size = 10),
+              axis.text.x = element_text(size = 10)))
+
 
