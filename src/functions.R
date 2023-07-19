@@ -122,15 +122,19 @@ make_games_datatable = function(data,
         
 }
 
+
+
+
+
 format_games_datatable = function(datatable) {
         
         complexity_breaks = seq(1, 5, 0.01)
-        complexity_colors = colorRampPalette(c("white", "orange"))(length(complexity_breaks) + 1)
+        complexity_colors = colorRampPalette(c("deepskyblue1", "white", "orange"))(length(complexity_breaks) + 1)
         
-        average_breaks = c(2, seq(3, 9, 0.1), 10)
+        average_breaks = c(2, 3, 4, seq(5, 8, 0.1), 8.5, 9, 10)
         average_colors = colorRampPalette(c("red", "white", "dodgerblue2"))(length(average_breaks) + 1)
         
-        geek_breaks = c(seq(4, 7, 0.1), 7.2, 7.4, 7.5, 8, 9)
+        geek_breaks = c(4, seq(5, 7, 0.1), 7.2, 7.4, 7.5, 8, 9)
         geek_colors = colorRampPalette(c("red", "white", "dodgerblue2"))(length(geek_breaks) + 1)
         
         ratings_breaks= c(0, 50, 100, 1000, 2000, 3000, 5000, 10000, 20000, 30000, 40000, 50000, 75000, 100000, 500000)
@@ -147,14 +151,15 @@ format_games_datatable = function(datatable) {
                             backgroundColor = styleInterval(cuts = geek_breaks, values = geek_colors))
 }
 
-games %>%
-        make_games_datatable() %>%
-        format_games_datatable()
-
-# quantiles = seq(0, 1, 0.05)
-# 
 # games %>%
-#         filter(!is.na(bayesaverage)) %>%  
+#         head(10000) %>%
+#         make_games_datatable() %>%
+#         format_games_datatable()
+# 
+# # quantiles = seq(0, 1, 0.05)
+# # 
+# games %>%
+#         filter(!is.na(bayesaverage)) %>%
 #         summarise(rating = quantile(usersrated, quantiles),
 #                   quantile = quantiles) %>%
 #         print(n = 50)
