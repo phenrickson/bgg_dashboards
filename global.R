@@ -46,6 +46,7 @@ gcs_board =
         )
 
 # load games data
+# info
 games = 
         pins::pin_read(
                 board = gcs_board,
@@ -54,11 +55,19 @@ games =
         # unnest some info
         unnest(c(bgg_outcomes, bgg_info)) %>%
         # arrange by geek rating
-        arrange(desc(bayesaverage))
+        arrange(desc(bayesaverage)) %>%
+        # # playercounts
+        unnest(playercounts) %>%
+        prep_playercounts() %>%
+        ungroup()
 
+# predictions
+games_predictions = 
+        pins::pin_read(
+                board = gcs_board,
+                name = "games_predicted"
+        ) 
 
 theme_set(bggUtils::theme_bgg()+
         theme(axis.text.y = element_text(size = 10),
               axis.text.x = element_text(size = 10)))
-
-

@@ -1,15 +1,4 @@
-# selectors
-# 
-# options(DT.options = list(pageLength = 10,
-#                           initComplete = htmlwidgets::JS("function(settings, json) {",
-#                                                          "$(this.api().table().container()).css({'font-size': '", '10pt', "'});};",
-#                                                          "}")
-#                           )
-# )
-
-
 # sidebar ---------------------------------------------------------------
-
 
 picker_options = 
         list(`actions-box` = TRUE,
@@ -85,11 +74,12 @@ select_designers =
 
 # recommended player counts
 select_rec_playercounts = 
-        selectInput(
+        pickerInput(
                 "rec_playercount",
                 label = 'Recommended Playercounts',
                 choices = c(seq(1,8), "8+"),
                 selected = c(seq(1,8), "8+"),
+                options = picker_options,
                 multiple = T
         )
 
@@ -114,12 +104,19 @@ ui <-
                                 bg = 'white',
                                 accordion(
                                         accordion_panel(
-                                                "Filters",
+                                                "Game Types",
                                                 select_categories,
-                                                #  select_publishers,
-                                                #  select_designers,
-                                                select_mechanics
+                                                select_mechanics                                              #  select_designers,
                                                 #   select_designers
+                                        ),
+                                        accordion_panel(
+                                                "Publisher/Designer",
+                                                select_designers,
+                                                select_publishers
+                                        ),
+                                        accordion_panel(
+                                                "Player Counts",
+                                                select_rec_playercounts
                                         ),
                                         accordion_panel(
                                                 "Other",
@@ -170,10 +167,10 @@ ui <-
                                 width = 1,
                                 heights_equal = "row",
                                 card(
-                                        plotOutput("plot1")
+                                        girafeOutput("plot1")
                                 ),
                                 card(
-                                        plotOutput("plot2")
+                                        girafeOutput("plot2")
                                 )
                         )
                 )
@@ -202,6 +199,16 @@ server<-
                                 get_distinct_var(selected_games,
                                                  mechanics)
                         
+                        # update publishers
+                        list_publishers = 
+                                get_distinct_var(selected_games,
+                                                 publishers)
+                        
+                        # update designers
+                        list_designers = 
+                                get_distinct_var(selected_games,
+                                                 designers)
+                        
                         # # update designers
                         # list_designers = 
                         #         get_distinct_var(selected_games,
@@ -221,12 +228,21 @@ server<-
                                           choices =  list_mechanics
                         )
                         
-                        # # update for designers
-                        # updatePickerInput(session = session, 
-                        #                   inputId = "designers",
-                        #                   selected = list_designers,
-                        #                   choices =  list_designers
-                        # )
+                        # update for designers
+                        updatePickerInput(session = session,
+                                          inputId = "designers",
+                                          selected = list_designers,
+                                          choices =  list_designers
+                        )
+                        
+                        # update for publishers
+                        updatePickerInput(session = session,
+                                          inputId = "publishers",
+                                          selected = list_publishers,
+                                          choices =  list_publishers
+                        )
+                        
+                        
                 }
                 
                 )
@@ -258,6 +274,23 @@ server<-
                                         pull(game_id)
                         })
                 
+                # games in designers
+                games_with_publishers = 
+                        reactive({
+                                games %>%
+                                        unnest(publishers) %>%
+                                        filter(value %in% input$publishers) %>%
+                                        pull(game_id)
+                        })
+                
+                # # games in playercounts
+                # games_with_rec_playercount = 
+                #         reactive({
+                #                 games %>%
+                #                         filter(input$rec_playercount %in% playercount_rec)
+                #                 
+                #         })
+                
                 # filter games based on selections
                 games_obj = 
                         reactive({
@@ -265,7 +298,11 @@ server<-
                                         filter(row_number() <= input$game_ranks) %>%
                                         filter(usersrated >= input$minimum_users) %>%
                                         filter(game_id %in% games_with_categories()) %>%
-                                        filter(game_id %in% games_with_mechanics())
+                                        filter(game_id %in% games_with_mechanics()) %>%
+                                        filter(game_id %in% games_with_designers()) %>%
+                                        filter(game_id %in% games_with_publishers())
+                                #%>%
+                                     #   filter(game_id %in% games_with_rec_playercount())
                         })
                 
                 
@@ -302,62 +339,93 @@ server<-
                 output$games_table =
                         DT::renderDT(
                                 games_obj() %>%
-                                        make_games_datatable()
-                                 #       datatable()
-                                        # DT::datatable(
-                                        #         rownames = F,
-                                        #         options = list(
-                                        #                 initComplete = JS(
-                                        #                         "function(settings, json) {",
-                                        #                         "$(this.api().table().header()).css({'background-color': '#000', 'color': '#fff'});",
-                                        #                         "}")
-                                        #         ))
+                                        #  datatable()
+                                        make_games_datatable(pageLength = 10) %>%
+                                        format_games_datatable()
+                                #       datatable()
+                                # DT::datatable(
+                                #         rownames = F,
+                                #         options = list(
+                                #                 initComplete = JS(
+                                #                         "function(settings, json) {",
+                                #                         "$(this.api().table().header()).css({'background-color': '#000', 'color': '#fff'});",
+                                #                         "}")
+                                #         ))
                         )
                 
                 # plots
                 output$plot1 =
-                        renderPlot(
+                        #  renderPlot(
+                        renderGirafe(
                                 # girafe(ggobj = 
-                                games_obj() %>%
-                                        ggplot(aes(x=averageweight,
-                                                   y=average,
-                                                   size = log(usersrated)))+
-                                        geom_point(alpha = 0.35)+
-                                        guides(size = 'none')+
-                                        coord_cartesian(xlim = c(0.95, 5.05),
-                                                        ylim = c(5.5, 9.5))
-                                
-                                #  width = 10
-                                # )
+                                girafe(ggobj = 
+                                               games_obj() %>%
+                                               mutate(highlight = case_when(row_number() %in% input$games_table_rows_selected ~ 'yes',
+                                                                            TRUE ~ 'no')) %>%
+                                               ggplot(aes(x=averageweight,
+                                                          y=average,
+                                                          alpha = highlight,
+                                                          color = average,
+                                                          size = log(usersrated),
+                                                          tooltip = paste0(name,
+                                                                           '\n',
+                                                                           'Average: ', round(average,2),
+                                                                           '\n',
+                                                                           'Complexity: ', round(averageweight, 2))))+
+                                               geom_point_interactive()+
+                                               guides(size = 'none')+
+                                               coord_cartesian(xlim = c(0.95, 5.05),
+                                                               ylim = c(5.5, 9.5))+
+                                               xlab("Complexity")+
+                                               ylab("Average")+
+                                               scale_color_gradient2(low = 'red', 
+                                                                     mid = 'grey65',
+                                                                     high = 'dodgerblue2',
+                                                                     midpoint = 7,
+                                                                     limits = c(5, 9),
+                                                                     oob=scales::squish)+
+                                               guides(color = guide_colorbar(barheight=0.5,
+                                                                             title.vjust = 1,
+                                                                             barwidth=15,
+                                                                             title.position = 'top'))+
+                                               guides(color = 'none',
+                                                      alpha = 'none')+
+                                               scale_alpha_manual(values = c(0.3, 1)),
+                                       width = 9)
                         )
                 
-                
-               sum_categories = 
-                       reactive({
-                       games_obj() %>%
-                       select(game_id, categories) %>% 
-                       unnest(categories)
-                       })
-               
-               output$plot2 = 
-                       renderPlot(
-                               if( 
-                                       nrow(sum_categories()) < 1) {
-                                       ggplot()
-                               } else {
-                                       sum_categories() %>%
-                                               group_by(value) %>%
-                                               summarize(n = n_distinct(game_id)) %>%
-                                               slice_max(order_by = n, n = 10) %>%
-                                               ggplot(aes(x=n,
-                                                          y = reorder(present_text(value), n)))+
-                                               geom_col()+
-                                               ylab("")                               
-                                       }
-                       )
+                # 
+                # sum_categories = 
+                #         reactive({
+                #                 games_obj() %>%
+                #                         select(game_id, categories) %>% 
+                #                         unnest(categories)
+                #         })
+                # 
+                output$plot2 = 
+                        renderGirafe({
+                                sum_categories =  games_obj() %>%
+                                        select(game_id, categories) %>% 
+                                        unnest(categories)
+                                
+                                if (nrow(sum_categories) < 1) {
+                                        ggplot()
+                                } else {
+                                        
+                                        girafe(ggobj = 
+                                                       sum_categories %>%
+                                                       group_by(value) %>%
+                                                       summarize(n = n_distinct(game_id)) %>%
+                                                       slice_max(order_by = n, n = 10) %>%
+                                                       ggplot(aes(x=n,
+                                                                  y = reorder(present_text(value), n)))+
+                                                       geom_col()+
+                                                       ylab(""),
+                                               width = 9
+                                        )
+                                }
+                        })
                 
         }
 
-rownames = FALSE) %>%
-        formatStyle(c("sell_value", "buy_value"), backgroundColor = styleInterval(brks, clrs))
-
+shinyApp(ui, server)

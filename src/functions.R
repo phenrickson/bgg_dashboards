@@ -87,7 +87,7 @@ datatable_default = function(data) {
 
 
 make_games_datatable = function(data,
-                                pageLength = 15) {
+                                pageLength = 10) {
         
         
         data %>%
@@ -102,15 +102,17 @@ make_games_datatable = function(data,
                 ) %>%
                 mutate_if(is.numeric, round, 2) %>%
                 datatable(escape=F,
-                          rownames = F,
-                          class = list(stripe = FALSE),
+                       #   rownames = F,
+                        #  class = list(stripe = FALSE),
                           # filter = list(position = 'top'),
                           options = list(pageLength = pageLength,
+                                         lengthChange = F,
                                          initComplete = htmlwidgets::JS(
                                                  "function(settings, json) {",
                                                  paste0("$(this.api().table().container()).css({'font-size': '", '8pt', "'});"),
                                                  "}"),
                                          scrollX=F,
+                                         stripe = F,
                                          autowidth=T,
                                          info = F,
                                          columnDefs = list(list(className = 'dt-center',
@@ -131,7 +133,7 @@ format_games_datatable = function(datatable) {
         complexity_breaks = seq(1, 5, 0.01)
         complexity_colors = colorRampPalette(c("deepskyblue1", "white", "orange"))(length(complexity_breaks) + 1)
         
-        average_breaks = c(2, 3, 4, seq(5, 8, 0.1), 8.5, 9, 10)
+        average_breaks = c(2, 3, 4, 5, 6, seq(7, 8, 0.1), 8.5, 9, 10)
         average_colors = colorRampPalette(c("red", "white", "dodgerblue2"))(length(average_breaks) + 1)
         
         geek_breaks = c(4, seq(5, 7, 0.1), 7.2, 7.4, 7.5, 8, 9)
@@ -150,6 +152,47 @@ format_games_datatable = function(datatable) {
                 formatStyle(c("Geek"),
                             backgroundColor = styleInterval(cuts = geek_breaks, values = geek_colors))
 }
+
+
+make_plot_average_complexity = function(data) {
+        
+        data %>%
+        ggplot(aes(x=averageweight,
+                   y=average,
+                  # alpha = highlight,
+                   color = average,
+                   size = log(usersrated),
+                   tooltip = paste0(name,
+                                    '\n',
+                                    'Average: ', round(average,2),
+                                    '\n',
+                                    'Complexity: ', round(averageweight, 2))))+
+                geom_point_interactive()+
+                guides(size = 'none')+
+                coord_cartesian(xlim = c(0.95, 5.05),
+                                ylim = c(5.5, 9.5))+
+                xlab("Complexity")+
+                ylab("Average")+
+                scale_color_gradient2(low = 'red', 
+                                      mid = 'grey65',
+                                      high = 'dodgerblue2',
+                                      midpoint = 7,
+                                      limits = c(5, 9),
+                                      oob=scales::squish)+
+                guides(color = guide_colorbar(barheight=0.5,
+                                              title.vjust = 1,
+                                              barwidth=15,
+                                              title.position = 'top'))+
+                guides(color = 'none',
+                       alpha = 'none')+
+                scale_alpha_manual(values = c(0.3, 1))
+}
+
+# games %>%
+#         head(1000) %>%
+#         make_plot_average_complexity() %>%
+#         girafe(ggobj = .)
+#         make_ga
 
 # games %>%
 #         head(10000) %>%
