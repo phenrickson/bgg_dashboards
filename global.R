@@ -104,7 +104,7 @@ games_categories =
 categories = 
         games_categories %>%
         pull_categorical()
-
+                                
 # games mechanics
 games_mechanics = 
         games %>%
@@ -127,7 +127,7 @@ designers =
 games_publishers = 
         games %>%
         unnest_categorical(variable = publishers,
-                           min = 5)
+                           min = 25)
 
 publishers = 
         games_publishers %>%
@@ -168,28 +168,33 @@ theme_set(bggUtils::theme_bgg()+
                   theme(axis.text.y = element_text(size = 10),
                         axis.text.x = element_text(size = 10)))
 
-library(htmltools)
+my_theme = 
+        bslib::bs_theme() %>%
+        bs_theme_update(version = 5,
+                        preset = "cerulean")
 
-anim_width <- function(x, width1, width2) {
-        x |> tagAppendAttributes(
-                class = "animate-width",
-                style = css(
-                        `--width1` = validateCssUnit(width1),
-                        `--width2` = validateCssUnit(width2),
-                ),
-        )
-}
-
-anim_height <- function(x, height1, height2) {
-        # Wrap in a div fixed at the height of height2, so the rest of
-        # the content on the page doesn't shift up and down
-        div(style = css(height = validateCssUnit(height2)),
-            x |> tagAppendAttributes(
-                    class = "animate-height",
-                    style = css(
-                            `--height1` = validateCssUnit(height1),
-                            `--height2` = validateCssUnit(height2),
-                    ),
-            )
-        )
-}
+# library(htmltools)
+# 
+# anim_width <- function(x, width1, width2) {
+#         x |> tagAppendAttributes(
+#                 class = "animate-width",
+#                 style = css(
+#                         `--width1` = validateCssUnit(width1),
+#                         `--width2` = validateCssUnit(width2),
+#                 ),
+#         )
+# }
+# 
+# anim_height <- function(x, height1, height2) {
+#         # Wrap in a div fixed at the height of height2, so the rest of
+#         # the content on the page doesn't shift up and down
+#         div(style = css(height = validateCssUnit(height2)),
+#             x |> tagAppendAttributes(
+#                     class = "animate-height",
+#                     style = css(
+#                             `--height1` = validateCssUnit(height1),
+#                             `--height2` = validateCssUnit(height2),
+#                     ),
+#             )
+#         )
+# }

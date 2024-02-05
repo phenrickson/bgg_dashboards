@@ -1,24 +1,15 @@
 # sidebar ---------------------------------------------------------------
 
-my_theme = 
-        bslib::bs_theme() %>%
-        bs_theme_update(version = 5,
-                        preset = "cerulean")
-
-# # set theme
-# bslib::bs_global_set(version = 5,
-#                      preset = "cerulean")
-
-# set picker options
-picker_options_default =
-        pickerOptions(
-                actionsBox = T,
-                liveSearch = T,
-                selectedTextFormat = "count > 5",
-                container = 'body',
-                width = 'auto',
-                size = 15
-        )
+# # set picker options
+# picker_options_default =
+#         pickerOptions(
+#                 actionsBox = T,
+#                 liveSearch = T,
+#                 selectedTextFormat = "count > 5",
+#                 container = 'body',
+#                 width = 'auto',
+#                 size = 15
+#         )
 
 button_style = 
         'padding:8px; font-size:80%'
@@ -75,20 +66,20 @@ global_filters =
 
 game_type_filters = 
         list(
-                shinyWidgets::pickerInput(
+                shinyWidgets::virtualSelectInput(
                         "categories",
                         label = "Select Categories",
-                        choices =  categories,
+                        search = T,
                         selected = categories,
-                        options = picker_options_default,
+                        choices = categories,
                         multiple = T
                 ),
-                shinyWidgets::pickerInput(
+                shinyWidgets::virtualSelectInput(
                         "mechanics",
                         label = "Select Mechanics",
-                        choices =  mechanics,
+                        search = T,
                         selected = mechanics,
-                        options = picker_options_default,
+                        choices =  mechanics,
                         multiple = T
                 ),
                 sliderInput(
@@ -99,29 +90,34 @@ game_type_filters =
                         step = 0.1,
                         value = c(1, 5),
                         ticks = F
+                ),
+                shinyWidgets::virtualSelectInput(
+                        "playercounts",
+                        label = "Select Player Counts",
+                        selected = unique(games_playercounts$playercount) %>% sort(),
+                        choices = unique(games_playercounts$playercount) %>% sort(),
+                        multiple = T
                 )
         )
 
 game_creator_filters = 
         list(
-                shinyWidgets::pickerInput(
+                shinyWidgets::virtualSelectInput(
                         "publishers",
                         label = "Select Publishers",
-                        choices =  publishers,
+                        search = T,
                         selected = publishers,
-                        options = picker_options_default,
-                        multiple = T
+                        choices =  publishers,
+                        multiple = T 
                 ),
-                shinyWidgets::pickerInput(
+                shinyWidgets::virtualSelectInput(
                         "designers",
                         label = "Select Designers",
+                        search = T,
                         choices =  designers,
-                        selected = designers,
-                        options = picker_options_default,
                         multiple = T
                 )
         )
-
 
 main_sidebar = 
         sidebar(
@@ -197,7 +193,7 @@ ui =
                                                 ),
                                                 # average ratings
                                                 value_box(
-                                                        title = "Avg. Users",
+                                                        title = "Avg. Ratings",
                                                         value = textOutput("average_usersrated"),
                                                         showcase = bsicons::bs_icon("people"),
                                                         theme_color = "secondary"
@@ -231,7 +227,7 @@ ui =
                                                 card(
                                                         card_header("Average Rating and Complexity"),
                                                         girafeOutput("average_vs_weight"),
-                                                        height = "400px"
+                                                        height = "300px"
                                                 ),
                                                 # # average vs users ratings
                                                 # card(
@@ -243,19 +239,19 @@ ui =
                                                 card(
                                                         card_header("Player Counts"),
                                                         girafeOutput("summary_playercounts",
-                                                                     height = '400px')
-                                                ),
-                                                # categorical
-                                                navset_card_tab(
-                                                        title = "Most Frequent",
-                                                        nav_panel("Categories", 
-                                                                  girafeOutput("top_categories"),
-                                                                  height = "300px"
-                                                        ),
-                                                        nav_panel("Mechanics", 
-                                                                  girafeOutput("top_mechanics"),
-                                                                  height = "300px"),
+                                                                     height = '300px')
                                                 )
+                                                # # categorical
+                                                # navset_card_tab(
+                                                #         title = "Most Frequent",
+                                                #         nav_panel("Categories", 
+                                                #                   girafeOutput("top_categories"),
+                                                #                   height = "300px"
+                                                #         ),
+                                                #         nav_panel("Mechanics", 
+                                                #                   girafeOutput("top_mechanics"),
+                                                #                   height = "300px"),
+                                                # )
                                         )
                                 )
                         )
@@ -315,7 +311,6 @@ ui =
 server <- function(input, output, session) {
         
         #  bslib::bs_themer()
-        
         output$check_filters =
                 renderText({
                         print(input$reset_filters)
@@ -373,7 +368,7 @@ server <- function(input, output, session) {
                         # designers
                         designers_options = 
                                 gamesInput() %>%
-                                unnest_categorical(designers, min = 5) %>%
+                                unnest_categorical(designers, min = 25) %>%
                                 pull_categorical()
                         
                         # update picker
@@ -437,187 +432,194 @@ server <- function(input, output, session) {
                                         filter(game_id %in% (games_designers %>%
                                                                      filter(value %in% input$designers) %>%
                                                                      pull(game_id))
+                                        ) %>%
+                                        # filter player counts
+                                        filter(game_id %in% (games_playercounts %>%
+                                                                     filter(playercount_votes >=5) %>%
+                                                                     filter(type %in% c('Best', 'Recommended')) %>%
+                                                                     filter(playercount %in% input$playercounts) %>%
+                                                                     pull(game_id))
                                         )
                         },
                         ignoreNULL = FALSE
-                )
-        
-        # list of game ids in selection
-        filtered_game_ids =
-                reactive({
-                        filtered_games() %>%
-                                pull(game_id)
-                })
-        
-        ### tables
-        output$games_table =
-                renderReactable({
-                        filtered_games() %>%
-                                select_summary_cols() %>%
-                                build_summary_table(
-                                        style = reactable_style(),
-                                        games = games,
-                                        simple = T,
-                                        defaultPageSize = 25
-                                )
-                }
-                )
-        
-        # output$outcomes =
-        #         renderGirafe({
-        #                 girafe(
-        #                         ggobj =
-        #                                 filtered_games() %>%
-        #                                 plot_outcomes_histograms(),
-        #                         width = 9)
-        #         }
-        #         )
-        # 
-        # plot_average_vs_weight_background = 
-        #         reactive({
-        #                 gamesInput() %>%
-        #                         plot_average_vs_weight(engine = 'ggplot',
-        #                                                y_range = c(0, 10))+
-        #                         geom_point()
-        #         })
-        # 
-        
-        ### plots
-        # average vs weight
-        output$average_vs_weight =
-                renderGirafe(
-                        {
-                                girafe(
-                                        ggobj = filtered_games() %>%
-                                                plot_average_vs_weight(engine = 'ggplot',
-                                                                       y_range = c(0, 10)),
-                                        width = 9
-                                )
-                        }
-                )
-        
-        # top categorical variables
-        categorical_vars = c("categories",
-                             "mechanics")
-        # "publishers",
-        # "designers",
-        # "artists")
-        
-        categorical_plots =
-                reactive({
-                        plots =
-                                map(categorical_vars,
-                                    ~ filtered_games() %>%
-                                            count_categorical(
-                                                    variable = .x,
-                                                    slice_n = 15,
-                                                    other = F) %>%
-                                            mutate(type = .x) %>%
-                                            plot_categorical()
-                                )
-                        
-                        names(plots) = categorical_vars
-                        
-                        plots
-                        
-                })
-        
-        output$top_categories =
-                renderGirafe({
-                        girafe(
-                                ggobj = categorical_plots()$categories                        
-                        )
-                })
-        
-        output$top_mechanics =
-                renderGirafe({
-                        girafe(
-                                ggobj = categorical_plots()$mechanics
-                        )
-                })
-        
-        # output$top_mechanics =
-        #         renderGirafe({
-        #                 girafe(
-        #                         ggobj = categorical_plots()$mechanics
-        #                 )
-        #         })
-        
-        # output$top_artists =
-        #         renderGirafe({
-        #                 ggobj = categorical_plots()$artists
-        #         })
-        # 
-        # output$top_designers =
-        #         renderGirafe({
-        #                 ggobj = categorical_plots()$designers
-        #         })
-        
-        # output$top_publishers =
-        #         renderGirafe({
-        #                 ggobj = categorical_plots()$publishers
-        #         })
-        
-        output$summary_playercounts =
-                renderGirafe({
-                        girafe(
-                                ggobj =
-                                        games_playercounts %>%
-                                        filter(game_id %in% filtered_game_ids()) %>%
-                                        plot_playercount_recommendations(),
-                                width = 9
-                        )
-                }
-                )
-        
-        ### value boxes
-        # display number of games
-        output$number_games =
-                reactive({
-                        nrow(filtered_games())
-                })
-        
-        # display average
-        output$average_rating =
-                reactive({
-                        mean(filtered_games()$average, na.rm=T) %>%
-                                round(., digits = 2)
-                })
-        
-        # display average complexity
-        output$average_complexity =
-                reactive({
-                        mean(filtered_games()$averageweight, na.rm=T) %>%
-                                round(., digits = 2)
-                })
-        
-        # display average complexity
-        output$average_usersrated =
-                reactive({
-                        mean(filtered_games()$usersrated, na.rm=T) %>%
-                                round(digits = 0)
-                })
-        
-        # bgg outcomes
-        output$bgg_outcomes = 
-                renderPlot({
-                        filtered_games() %>%
-                                filter(!is.na(bayesaverage)) %>%
-                                mutate(usersrated = log(usersrated)) %>%
-                                select(
-                                        game_id,
-                                        any_of(bgg_outcomes())
-                                ) %>%
-                                ggplot(aes(x=.panel_x,
-                                           y = .panel_y)) +
-                                geom_autopoint(size = 0.75)+
-                                geom_autodensity(alpha = 0.6)+
-                                facet_matrix(
-                                        vars(average, averageweight, usersrated),
-                                        layer.diag = 2,
-                                        grid.y.diag = F,
-                                )
-                })
+                                        )
+                                
+                                # list of game ids in selection
+                                filtered_game_ids =
+                                        reactive({
+                                                filtered_games() %>%
+                                                        pull(game_id)
+                                        })
+                                
+                                ### tables
+                                output$games_table =
+                                        renderReactable({
+                                                filtered_games() %>%
+                                                        select_summary_cols() %>%
+                                                        build_summary_table(
+                                                                style = reactable_style(),
+                                                                games = games,
+                                                                simple = T,
+                                                                defaultPageSize = 25
+                                                        )
+                                        }
+                                        )
+                                
+                                # output$outcomes =
+                                #         renderGirafe({
+                                #                 girafe(
+                                #                         ggobj =
+                                #                                 filtered_games() %>%
+                                #                                 plot_outcomes_histograms(),
+                                #                         width = 9)
+                                #         }
+                                #         )
+                                # 
+                                # plot_average_vs_weight_background = 
+                                #         reactive({
+                                #                 gamesInput() %>%
+                                #                         plot_average_vs_weight(engine = 'ggplot',
+                                #                                                y_range = c(0, 10))+
+                                #                         geom_point()
+                                #         })
+                                # 
+                                
+                                ### plots
+                                # average vs weight
+                                output$average_vs_weight =
+                                        renderGirafe(
+                                                {
+                                                        girafe(
+                                                                ggobj = filtered_games() %>%
+                                                                        plot_average_vs_weight(engine = 'ggplot',
+                                                                                               y_range = c(0, 10)),
+                                                                width = 12
+                                                        )
+                                                }
+                                        )
+                                
+                                # top categorical variables
+                                categorical_vars = c("categories",
+                                                     "mechanics")
+                                # "publishers",
+                                # "designers",
+                                # "artists")
+                                
+                                categorical_plots =
+                                        reactive({
+                                                plots =
+                                                        map(categorical_vars,
+                                                            ~ filtered_games() %>%
+                                                                    count_categorical(
+                                                                            variable = .x,
+                                                                            slice_n = 15,
+                                                                            other = F) %>%
+                                                                    mutate(type = .x) %>%
+                                                                    plot_categorical()
+                                                        )
+                                                
+                                                names(plots) = categorical_vars
+                                                
+                                                plots
+                                                
+                                        })
+                                
+                                output$top_categories =
+                                        renderGirafe({
+                                                girafe(
+                                                        ggobj = categorical_plots()$categories                        
+                                                )
+                                        })
+                                
+                                output$top_mechanics =
+                                        renderGirafe({
+                                                girafe(
+                                                        ggobj = categorical_plots()$mechanics
+                                                )
+                                        })
+                                
+                                # output$top_mechanics =
+                                #         renderGirafe({
+                                #                 girafe(
+                                #                         ggobj = categorical_plots()$mechanics
+                                #                 )
+                                #         })
+                                
+                                # output$top_artists =
+                                #         renderGirafe({
+                                #                 ggobj = categorical_plots()$artists
+                                #         })
+                                # 
+                                # output$top_designers =
+                                #         renderGirafe({
+                                #                 ggobj = categorical_plots()$designers
+                                #         })
+                                
+                                # output$top_publishers =
+                                #         renderGirafe({
+                                #                 ggobj = categorical_plots()$publishers
+                                #         })
+                                
+                                output$summary_playercounts =
+                                        renderGirafe({
+                                                girafe(
+                                                        ggobj =
+                                                                games_playercounts %>%
+                                                                filter(game_id %in% filtered_game_ids()) %>%
+                                                                plot_playercount_recommendations(),
+                                                        width = 9
+                                                )
+                                        }
+                                        )
+                                
+                                ### value boxes
+                                # display number of games
+                                output$number_games =
+                                        reactive({
+                                                nrow(filtered_games())
+                                        })
+                                
+                                # display average
+                                output$average_rating =
+                                        reactive({
+                                                mean(filtered_games()$average, na.rm=T) %>%
+                                                        round(., digits = 2)
+                                        })
+                                
+                                # display average complexity
+                                output$average_complexity =
+                                        reactive({
+                                                mean(filtered_games()$averageweight, na.rm=T) %>%
+                                                        round(., digits = 2)
+                                        })
+                                
+                                # display average complexity
+                                output$average_usersrated =
+                                        reactive({
+                                                mean(filtered_games()$usersrated, na.rm=T) %>%
+                                                        round(digits = 0)
+                                        })
+                                
+                                # bgg outcomes
+                                output$bgg_outcomes = 
+                                        renderPlot({
+                                                filtered_games() %>%
+                                                        filter(!is.na(bayesaverage)) %>%
+                                                        mutate(usersrated = log(usersrated)) %>%
+                                                        select(
+                                                                game_id,
+                                                                any_of(bgg_outcomes())
+                                                        ) %>%
+                                                        ggplot(aes(x=.panel_x,
+                                                                   y = .panel_y)) +
+                                                        geom_autopoint(size = 0.75)+
+                                                        geom_autodensity(alpha = 0.6)+
+                                                        facet_matrix(
+                                                                vars(average, averageweight, usersrated),
+                                                                layer.diag = 2,
+                                                                grid.y.diag = F,
+                                                        )
+                                        })
 }
 
 shinyApp(ui, server)
